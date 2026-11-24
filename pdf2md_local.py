@@ -640,6 +640,7 @@ def tool_version(config, tool):
 # So pdf2md-local needs a GPU: it does not install on CPU-only machines.
 
 MIN_DISK_GB = 15            # MinerU, its Python packages and models, with room to spare
+MIN_DISK_GB_INSTALLED = 5   # MinerU already installed: its models (downloaded on first use) and the md files
 MIN_RAM_GB = {"discrete": 8, "apple": 8, "integrated": 16}   # integrated GPUs share system memory
 MIN_VRAM_GB = 6             # MinerU itself treats smaller discrete GPUs as unreliable
 MIN_MACOS = (14, 0)         # MinerU's MLX engine needs macOS 14+
@@ -764,7 +765,8 @@ def linux_vram_gb(name):
     return None
 
 
-def hardware_report(gpus=None, ram_gb=None, disk_free_gb=None, macos_version=None, machine=None, accept_gpu=False):
+def hardware_report(gpus=None, ram_gb=None, disk_free_gb=None, macos_version=None, machine=None, accept_gpu=False,
+                    mineru_installed=None):
     """Does this machine meet the minimum requirements? Returns a dict: ok, tier, verdict, best GPU, problems, notes.
 
     Arguments are only for tests; normally everything is measured here.
@@ -777,6 +779,9 @@ def hardware_report(gpus=None, ram_gb=None, disk_free_gb=None, macos_version=Non
         ram_gb = system_ram_gb()
     if disk_free_gb is None:
         disk_free_gb = shutil.disk_usage(str(HOME)).free / 2**30
+        if mineru_installed is None:
+            # Installing MinerU itself uses most of the 15 GB, so checking again afterwards needs far less
+            mineru_installed = detect_tool("mineru") is not None
     if macos_version is None and IS_MAC:
         macos_version = tuple(int(part) for part in (platform.mac_ver()[0] or "0").split(".")[:2] if part.isdigit())
 
@@ -803,7 +808,11 @@ def hardware_report(gpus=None, ram_gb=None, disk_free_gb=None, macos_version=Non
             problems.append(f"macOS {'.'.join(map(str, macos_version))}; MinerU on Apple Silicon needs macOS 14 or newer.")
         if best["verdict"] == "slow":
             notes.append(f"{best['name']}: works but slowly ({best['reason']}). Fine for a few papers, e.g. overnight.")
-    if disk_free_gb is not None and disk_free_gb < MIN_DISK_GB:
+    if mineru_installed:
+        if disk_free_gb is not None and disk_free_gb < MIN_DISK_GB_INSTALLED:
+            problems.append(f"{disk_free_gb:.0f} GB free disk space; MinerU's models and the md files need "
+                            f"{MIN_DISK_GB_INSTALLED} GB.")
+    elif disk_free_gb is not None and disk_free_gb < MIN_DISK_GB:
         problems.append(f"{disk_free_gb:.0f} GB free disk space; installing MinerU needs {MIN_DISK_GB} GB.")
     return {"ok": not problems, "best": best, "gpus": rated, "ram_gb": ram_gb, "disk_free_gb": disk_free_gb,
             "problems": problems, "notes": notes}

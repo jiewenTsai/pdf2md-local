@@ -80,6 +80,10 @@ class ReportTest(unittest.TestCase):
 
     def test_disk_and_macos(self):
         self.assertFalse(self.report([("NVIDIA GeForce RTX 3060", 12.0)], disk=5)["ok"])
+        # After MinerU is installed (installer step 4) only its models and the md files still need room
+        self.assertTrue(self.report([("NVIDIA GeForce RTX 3060", 12.0)], disk=13, mineru_installed=True)["ok"])
+        self.assertFalse(self.report([("NVIDIA GeForce RTX 3060", 12.0)], disk=13, mineru_installed=False)["ok"])
+        self.assertFalse(self.report([("NVIDIA GeForce RTX 3060", 12.0)], disk=3, mineru_installed=True)["ok"])
         apple = self.report([("Apple GPU", None)], ram=16, machine="apple", macos_version=(13, 6))
         self.assertFalse(apple["ok"])
         self.assertTrue(self.report([("Apple GPU", None)], ram=16, machine="apple", macos_version=(14, 2))["ok"])
