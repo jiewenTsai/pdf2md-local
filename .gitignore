@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+*.zip
+.venv/
+# PDFs and converted output never belong in the repo
+*.pdf
+output/
+inbox/

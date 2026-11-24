@@ -1,0 +1,165 @@
+# pdf2md-local
+
+Turn book and paper PDFs into Markdown on your own computer. Drop a PDF into **input_pdf**, and a few minutes later its Markdown is in **output_md**:
+- formulas come out as LaTeX;
+- tables keep their structure;
+- figures are saved as images next to the text.
+
+```
+input_pdf/                       output_md/
+  paper.pdf   ──watcher──►         okafor_2021_variational-inference-rating/
+  done/paper.pdf                     okafor_2021_variational-inference-rating.md
+                                     page_3_image_1.jpg ...
+```
+
+It runs [MinerU](https://github.com/opendatalab/MinerU) locally on your GPU, on Windows, macOS (Apple Silicon) and Linux. Nothing is uploaded.
+
+What it never does:
+- overwrite an existing md;
+- delete a PDF (converted PDFs move to `input_pdf/done/`);
+- put a PDF in the output folder;
+- run MinerU with `--remote`.
+
+## Minimum requirements
+
+pdf2md-local needs a GPU. The installer checks this first and stops before downloading anything if the computer falls short.
+
+| | Requirement |
+|---|---|
+| GPU (one of) | Discrete NVIDIA/AMD with 6 GB+ video memory (Windows, Linux); Apple Silicon on macOS 14+; integrated Intel Iris Xe / Arc or AMD Radeon 680M–890M (Iris Xe class is the minimum) |
+| Memory | 8 GB (discrete GPU, Apple Silicon); 16 GB (integrated GPU, which shares system memory) |
+| Disk | 15 GB free |
+| Python | 3.11–3.14 for MinerU (the installer finds it) |
+| Linux | Vulkan: `sudo apt install libvulkan1 mesa-vulkan-drivers` |
+
+Not supported:
+- CPU only;
+- Intel UHD 7xx (it works, but at about 142 s per page a 30-page paper takes about 70 minutes);
+- Intel HD / UHD 6xx;
+- discrete GPUs under 6 GB;
+- Intel Macs.
+
+Measured on 6 pages: RTX 3060 took 54 s; Intel UHD 770 took 851 s, with the same output; CPU only would take about 10 hours (stopped early).
+
+`--accept-gpu` lets a GPU pdf2md-local does not recognise through. It never lets a CPU-only machine through.
+
+## Install
+
+Download or clone this folder, then run:
+
+| OS | Command |
+|---|---|
+| macOS, Linux | `sh install.sh` |
+| Windows | `powershell -ExecutionPolicy Bypass -File install.ps1` |
+
+Add `--check` (Windows: `-Check`) to only check the hardware.
+
+The installer takes five steps:
+1. Checks the hardware.
+2. Finds Python 3.11–3.14.
+3. Installs MinerU 4.2.3 into `~/.pdf2md-local/envs/mineru`. An existing conda env named `pdf2md-mineru` is used as it is, never upgraded.
+4. Copies the program to `~/.pdf2md-local/app` and checks that MinerU sees the GPU.
+5. Creates `~/pdf2md-local/input_pdf` and `~/pdf2md-local/output_md`, starts the background watcher, and adds a `pdf2md-local` command.
+
+The first conversion downloads MinerU's models (a few GB), so it is slow once.
+
+To uninstall, run `sh install.sh --uninstall` (Windows: `-Uninstall`). It stops the watcher and removes `~/.pdf2md-local`. Your two folders and everything in them stay.
+
+## Everyday use
+
+| You want to | Do this |
+|---|---|
+| Convert a PDF | Drop it into `input_pdf`. |
+| Find the folders | `pdf2md-local open` |
+| See what is happening | `pdf2md-local status` shows the watcher, the current file with progress, waiting PDFs and the recent log. |
+| Convert now, with a progress bar | `pdf2md-local run` |
+| Convert a PDF where it is (it is not moved) | `pdf2md-local convert paper.pdf` |
+| Ask whether a PDF was converted already | `pdf2md-local check paper.pdf` |
+| Check the installation | `pdf2md-local doctor` |
+
+The watcher only converts files that haven't changed for 60 seconds, so a PDF that is still being copied is left alone. It moves each PDF on to one of three folders:
+- `done/`: converted.
+- `skipped/`: an md already exists.
+- `failed/`: see `pdf2md-local_log.txt` in the input folder.
+
+## Moving the folders
+
+You may move or rename `input_pdf` and `output_md` whenever you like, anywhere inside your home folder (Desktop, Documents, a Dropbox folder, …).
+
+Each folder contains a hidden `.pdf2md-local_folder.json` with a random id. **Keep that file.** When a folder is missing, pdf2md-local searches your home folder for that id and follows it:
+- the search goes 5 levels deep and skips hidden and system folders;
+- it updates the config;
+- a running watcher follows within about 15 seconds.
+
+A folder is never recreated at its old path. If it cannot be found (for example, it was moved to another drive), commands say so; run `pdf2md-local setup` to point to it.
+
+## Naming
+
+Each md folder is named `surname_year_short-title`, in lower case, taken from the paper itself:
+1. a DOI in the PDF, looked up on Crossref;
+2. an arXiv id, looked up on arXiv;
+3. the md's title, searched on Crossref;
+4. offline: title, first author and year from the md's first page;
+5. failing all of that, the file name.
+
+Zotero file names (`Author - 2021 - Title.pdf`) are used as they are.
+
+Only the DOI, arXiv id or title is sent to api.crossref.org / export.arxiv.org; the PDF never leaves the computer. Set `"metadata_lookup": false` in the config to stay offline.
+
+`output_md/pdf2md-local_index.json` maps each PDF's SHA-256 to its folder, so a second copy of the same paper is not converted again.
+
+Each md starts with YAML front matter:
+- `source_pdf`, `tool`, `tool_version` and `converted`;
+- `title`, `doi`, `named_from` and `source_sha256`.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `setup [--input DIR --output DIR] [--yes]` | Check the hardware and MinerU, create the folders, write the config. |
+| `status [--lines N]` | Watcher, current conversion and progress, waiting PDFs, recent log. |
+| `open [--print-only]` | Open both folders. |
+| `run` | Convert every PDF in the input folder now. |
+| `convert PDF...` | Convert PDFs by path; the originals stay where they are. |
+| `check PDF...` | `EXISTS`/`MISSING` and the md path. |
+| `service install\|uninstall\|restart\|status` | The background watcher. |
+| `watch` | Run the watcher in the foreground (the service runs this). |
+| `hardware [--require] [--accept-gpu]` | Does this computer meet the minimum requirements? |
+| `doctor` | Config, folders, MinerU, GPU, service. |
+| `index rebuild [--offline]` | Record existing output folders in the index (nothing is renamed). |
+
+How the watcher is kept running:
+
+| OS | Mechanism |
+|---|---|
+| Windows | Task Scheduler task `pdf2md-local watcher`: at logon, plus a retry every 5 minutes (ignored while it runs). No console window. |
+| macOS | launchd agent `~/Library/LaunchAgents/com.pdf2md-local.watcher.plist` with `KeepAlive`. |
+| Linux | systemd user unit `pdf2md-local-watcher.service` with `Restart=always`. Run `loginctl enable-linger $USER` to keep it running while logged out. |
+
+The config file is in one of these places:
+- Windows: `%APPDATA%\pdf2md-local\config.json`
+- macOS: `~/Library/Application Support/pdf2md-local/config.json`
+- Linux: `~/.config/pdf2md-local/config.json`
+
+Overrides, in order of precedence:
+1. The `--input`/`--output` flags.
+2. The environment variables `PDF2MD_LOCAL_INPUT`/`PDF2MD_LOCAL_OUTPUT`. Folders given this way are used as they are and not followed when moved.
+3. The config file.
+
+`PDF2MD_LOCAL_CONFIG` points to another config file.
+
+## Status
+
+Tested on Windows 11 (RTX 3060). The macOS and Linux code paths are there, and unit tests cover the platform logic, but they have not been run on those systems yet.
+
+## Development
+
+```
+python -m unittest discover -s tests
+```
+
+The tests use only the standard library and run with or without `psutil` and `watchdog`.
+
+## License
+
+MIT. MinerU itself is licensed separately by its authors; see its repository.

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdf2md-local"
+version = "1.0.0"
+description = "Drop PDFs into input_pdf; a local watcher converts them to Markdown in output_md with MinerU on your GPU."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+dependencies = []
+
+[project.optional-dependencies]
+# The watcher reacts to file events with watchdog and checks PIDs with psutil.
+# Without them it polls every 15 s and uses a simpler PID check.
+watch = ["watchdog", "psutil"]
+
+[project.scripts]
+pdf2md-local = "pdf2md_local:main"
+
+[tool.setuptools]
+py-modules = ["pdf2md_local"]
