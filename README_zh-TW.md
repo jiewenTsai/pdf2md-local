@@ -53,21 +53,23 @@ pdf2md-local 一定要有 GPU。安裝程式第一步就會檢查，電腦不符
 
 ## 二、安裝
 
-在終端機貼上一行就好（會把這個 repo 下載到暫存資料夾，再執行安裝程式）：
+在終端機貼上一行就好。它會把這個 repo 下載到暫存資料夾、執行安裝程式，裝完再把暫存資料夾刪掉。
 
-Windows（PowerShell）：
+**Windows**：打開 PowerShell（開始功能表輸入 `PowerShell`），執行：
 
 ```powershell
 irm https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.ps1 | iex
 ```
 
-macOS、Linux：
+**macOS、Linux**：打開「終端機」，執行：
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.sh | sh
 ```
 
-想先只檢查硬體：
+裝好後**開一個新的終端機視窗**，執行 `pdf2md-local open` 就會打開兩個資料夾。
+
+想先只檢查硬體（不會安裝任何東西）：
 
 ```powershell
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.ps1))) -Check
@@ -77,27 +79,45 @@ curl -fsSL https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/instal
 curl -fsSL https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.sh | sh -s -- --check
 ```
 
-也可以下載或 clone 這個資料夾，在終端機進入資料夾後執行：
-
-| 系統 | 指令 |
-|---|---|
-| macOS、Linux | `sh install.sh` |
-| Windows | `powershell -ExecutionPolicy Bypass -File install.ps1` |
-
-只想檢查硬體時，加上 `--check`（Windows 用 `-Check`），這樣不會安裝任何東西。
-
 安裝程式分五步：
-1. 檢查硬體。
+1. 檢查硬體。不符合最低需求的電腦會在這一步停下，什麼都不會下載。
 2. 找 Python 3.11–3.14。
-3. 把 MinerU 4.2.3 裝到 `~/.pdf2md-local/envs/mineru`。電腦上已經有名叫 `pdf2md-mineru` 的 conda 環境時，直接沿用，不會升級它。
+3. 把 MinerU 4.2.3 裝到 `~/.pdf2md-local/envs/mineru`（幾 GB，要一點時間）。電腦上已經有名叫 `pdf2md-mineru` 的 conda 環境時，直接沿用，不會升級它。
 4. 把程式複製到 `~/.pdf2md-local/app`，並確認 MinerU 看得到 GPU。
 5. 建立 `~/pdf2md-local/input_pdf` 和 `~/pdf2md-local/output_md`，啟動背景監看程式，並加入 `pdf2md-local` 指令。
 
-第一次轉檔時，MinerU 要先下載模型（幾 GB），所以只有第一次會比較慢。
+中途停下時，照畫面上的說明處理後，再執行同一行即可；已經裝好的 MinerU 不會重新下載。
 
-**移除**：執行 `sh install.sh --uninstall`（Windows 用 `-Uninstall`）。這會停止監看程式，並刪除 `~/.pdf2md-local`。你的兩個資料夾和裡面的檔案都會保留。
+第一次轉檔時，MinerU 要先下載模型（約 2–3 GB，放在 `~/.mineru`），所以只有第一次會比較慢。
 
-## 三、使用方式
+如果是下載或 clone 整個資料夾，同一個安裝程式可以這樣執行：macOS、Linux 用 `sh install.sh`，Windows 用 `powershell -ExecutionPolicy Bypass -File install.ps1`；加上 `--check`（Windows 用 `-Check`）就只檢查硬體。
+
+## 三、移除
+
+**Windows**（PowerShell）：
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.ps1))) -Uninstall
+```
+
+**macOS、Linux**（終端機）：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.sh | sh -s -- --uninstall
+```
+
+這會停止並移除背景監看程式、移除 `pdf2md-local` 指令，並刪除 `~/.pdf2md-local`（程式本身和它裝的 MinerU）。安裝只做到一半時也可以用。
+
+下面這些**不會**被刪掉：
+
+| 項目 | 位置 | 想刪的話 |
+|---|---|---|
+| 你的 PDF 和 md | `input_pdf`、`output_md`（搬到哪裡就在哪裡） | 直接刪掉這兩個資料夾 |
+| MinerU 的模型（2–3 GB） | `~/.mineru` | 刪掉這個資料夾；電腦上還有其他 MinerU 在用的話就留著 |
+| 設定檔 | 見〈七、背景監看程式與設定檔〉 | 刪掉 `config.json` 和它所在的 `pdf2md-local` 資料夾 |
+| 安裝前就有的 conda 環境 `pdf2md-mineru` | 你的 conda 資料夾 | 沒有別的用途時：`conda env remove -n pdf2md-mineru` |
+
+## 四、使用方式
 
 | 你想要 | 這樣做 |
 |---|---|
@@ -114,7 +134,7 @@ curl -fsSL https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/instal
 - `skipped/`：已經有 md，沒有重轉。
 - `failed/`：轉檔失敗，原因寫在 input 資料夾裡的 `pdf2md-local_log.txt`。
 
-## 四、資料夾可以隨時搬動或改名
+## 五、資料夾可以隨時搬動或改名
 
 `input_pdf` 和 `output_md` 可以隨時搬到家目錄底下的任何地方，例如桌面、文件或 Dropbox 資料夾，也可以改名。
 
@@ -127,7 +147,7 @@ curl -fsSL https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/instal
 
 它不會在舊位置重新建立資料夾。找不到時（例如搬到別的磁碟），指令會告訴你找不到；這時執行 `pdf2md-local setup` 指定新位置即可。
 
-## 五、命名規則
+## 六、命名規則
 
 每個 md 資料夾都命名為 `第一作者姓_年份_短標題`，全部小寫。名稱依下面的順序決定，前面的方法找不到才用下一個：
 1. PDF 裡的 DOI，到 Crossref 查；
@@ -146,7 +166,7 @@ Zotero 格式的檔名（`作者 - 2021 - 標題.pdf`）直接沿用。
 - `source_pdf`、`tool`、`tool_version`、`converted`；
 - `title`、`doi`、`named_from`、`source_sha256`。
 
-## 六、背景監看程式與設定檔
+## 七、背景監看程式與設定檔
 
 監看程式在各系統上的執行方式：
 
@@ -171,7 +191,7 @@ Zotero 格式的檔名（`作者 - 2021 - 標題.pdf`）直接沿用。
 
 另外，`PDF2MD_LOCAL_CONFIG` 可以指定改用另一個設定檔。
 
-## 七、疑難排解
+## 八、疑難排解
 
 | 狀況 | 處理 |
 |---|---|
@@ -181,7 +201,7 @@ Zotero 格式的檔名（`作者 - 2021 - 標題.pdf`）直接沿用。
 | 找不到資料夾 | `pdf2md-local setup` 重新指定位置 |
 | 在終端機裡找不到 `pdf2md-local` 指令 | 開一個新的終端機。Linux／macOS 要確認 `~/.local/bin` 在 PATH 裡 |
 
-## 八、目前狀態
+## 九、目前狀態
 
 已在 Windows 11（RTX 3060）上測試過。macOS 和 Linux 的程式都寫好了，單元測試也涵蓋了各平台的邏輯，但還沒有在這兩個系統上實際跑過。
 

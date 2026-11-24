@@ -103,8 +103,8 @@ if [ -n "$EXISTING" ]; then
     echo "skipped"
 else
     "$ENV_PY" -m venv "$ENV"
-    "$ENV/bin/python" -m pip install --upgrade pip
-    "$ENV/bin/python" -m pip install "mineru==$MINERU_VERSION" psutil watchdog
+    "$ENV/bin/python" -m pip install --no-cache-dir --upgrade pip
+    "$ENV/bin/python" -m pip install --no-cache-dir "mineru==$MINERU_VERSION" psutil watchdog
     RUN_PY="$ENV/bin/python"
 fi
 

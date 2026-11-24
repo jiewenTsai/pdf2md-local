@@ -102,8 +102,8 @@ if ($Existing) {
     Write-Host "skipped"
 } else {
     & $EnvPy @EnvPyArgs -m venv $EnvDir
-    & "$EnvDir\Scripts\python.exe" -m pip install --upgrade pip
-    & "$EnvDir\Scripts\python.exe" -m pip install "mineru==$MineruVersion" psutil watchdog
+    & "$EnvDir\Scripts\python.exe" -m pip install --no-cache-dir --upgrade pip
+    & "$EnvDir\Scripts\python.exe" -m pip install --no-cache-dir "mineru==$MineruVersion" psutil watchdog
     if ($LASTEXITCODE -ne 0) { Write-Host "pip install failed; see above."; exit 1 }
     $RunPy = "$EnvDir\Scripts\python.exe"
 }

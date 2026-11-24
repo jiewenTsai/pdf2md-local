@@ -45,21 +45,23 @@ Measured on 6 pages: RTX 3060 took 54 s; Intel UHD 770 took 851 s, with the same
 
 ## Install
 
-One line in a terminal (it downloads this repo into a temp folder and runs the installer):
+Paste one line into a terminal. It downloads this repo into a temp folder, runs the installer, and removes the temp folder again.
 
-Windows (PowerShell):
+**Windows**: open PowerShell (Start menu, type `PowerShell`) and run:
 
 ```powershell
 irm https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.ps1 | iex
 ```
 
-macOS, Linux:
+**macOS, Linux**: open Terminal and run:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.sh | sh
 ```
 
-To only check the hardware first:
+When it finishes, open a **new** terminal window and run `pdf2md-local open` to see the two folders.
+
+To only check the hardware first (installs nothing):
 
 ```powershell
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.ps1))) -Check
@@ -69,25 +71,43 @@ To only check the hardware first:
 curl -fsSL https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.sh | sh -s -- --check
 ```
 
-Or download or clone this folder, then run:
-
-| OS | Command |
-|---|---|
-| macOS, Linux | `sh install.sh` |
-| Windows | `powershell -ExecutionPolicy Bypass -File install.ps1` |
-
-Add `--check` (Windows: `-Check`) to only check the hardware.
-
 The installer takes five steps:
-1. Checks the hardware.
+1. Checks the hardware. A computer below the minimum stops here, before anything is downloaded.
 2. Finds Python 3.11–3.14.
-3. Installs MinerU 4.2.3 into `~/.pdf2md-local/envs/mineru`. An existing conda env named `pdf2md-mineru` is used as it is, never upgraded.
+3. Installs MinerU 4.2.3 into `~/.pdf2md-local/envs/mineru` (a few GB; takes a while). An existing conda env named `pdf2md-mineru` is used as it is, never upgraded.
 4. Copies the program to `~/.pdf2md-local/app` and checks that MinerU sees the GPU.
-5. Creates `~/pdf2md-local/input_pdf` and `~/pdf2md-local/output_md`, starts the background watcher, and adds a `pdf2md-local` command.
+5. Creates `~/pdf2md-local/input_pdf` and `~/pdf2md-local/output_md`, starts the background watcher, and adds the `pdf2md-local` command.
 
-The first conversion downloads MinerU's models (a few GB), so it is slow once.
+If it stops halfway, fix what it reports and run the same line again; an installed MinerU is not downloaded again.
 
-To uninstall, run `sh install.sh --uninstall` (Windows: `-Uninstall`). It stops the watcher and removes `~/.pdf2md-local`. Your two folders and everything in them stay.
+The first conversion downloads MinerU's models (about 2–3 GB, into `~/.mineru`), so it is slow once.
+
+From a downloaded or cloned copy of this folder, the same installer runs as `sh install.sh` (macOS, Linux) or `powershell -ExecutionPolicy Bypass -File install.ps1` (Windows), with `--check` / `-Check` to only check the hardware.
+
+## Uninstall
+
+**Windows** (PowerShell):
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.ps1))) -Uninstall
+```
+
+**macOS, Linux** (Terminal):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.sh | sh -s -- --uninstall
+```
+
+This stops and removes the background watcher, removes the `pdf2md-local` command, and deletes `~/.pdf2md-local` (the program and the MinerU it installed). It works after a half-finished install too.
+
+It does **not** touch:
+
+| What | Where | Remove it yourself if you want |
+|---|---|---|
+| Your PDFs and md files | `input_pdf`, `output_md` (wherever you moved them) | Delete the folders. |
+| MinerU's models (2–3 GB) | `~/.mineru` | Delete the folder, unless another MinerU on this computer still uses it. |
+| The config file | listed under [Commands](#commands) | Delete `config.json` and its `pdf2md-local` folder. |
+| A conda env `pdf2md-mineru` you had before | your conda folder | `conda env remove -n pdf2md-mineru`, if nothing else uses it. |
 
 ## Everyday use
 
