@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 (2026-11-25)
 
 - One-line install and uninstall: `irm … | iex` on Windows, `curl … | sh` on macOS and Linux.
 - The installer's second hardware check (after MinerU is installed) requires 5 GB free instead of 15, which had refused a good install on a Mac with 13 GB left.

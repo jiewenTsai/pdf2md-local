@@ -40,7 +40,7 @@ import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 APP = "pdf2md-local"
 
 IS_WINDOWS = os.name == "nt"
