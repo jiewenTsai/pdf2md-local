@@ -22,6 +22,28 @@ input_pdf/                       output_md/
 
 ---
 
+## 主要依賴：MinerU（來源與風險）
+
+pdf2md-local 只是外層的包裝，真正的轉檔工作（版面分析、OCR、公式、表格）全部由 [MinerU](https://github.com/opendatalab/MinerU) 完成，安裝程式會從 PyPI 下載它。安裝前請先了解它的來源：
+
+| 項目 | 說明 |
+|---|---|
+| 開發者 | 上海人工智能實驗室的 OpenDataLab，是中國由政府支持的研究機構。 |
+| 版本 | 固定為 4.2.3，安裝程式不會升級它。 |
+| 模型 | 第一次轉檔時，從 Hugging Face 下載到 `~/.mineru`（這是 MinerU 的預設；另一個來源是阿里巴巴營運的 ModelScope）。內容是 MinerU2.5 視覺語言模型（1.2B），以及百度 PaddlePaddle 系列的版面分析和 OCR 模型（PP-DocLayout、PaddleOCR）。 |
+| 授權 | 「MinerU Open Source License」：Apache 2.0 加上附加條款。月活躍使用者超過 1 億或月營收超過 2000 萬美元時，要另外取得商業授權；用它提供線上服務時，必須標明使用了 MinerU。在自己電腦上做個人或研究用途不受影響。 |
+
+pdf2md-local 在隱私上做了什麼：
+- MinerU **只在本機執行**。pdf2md-local 絕不加 `--remote`，加了的話 PDF 會被上傳到 mineru.net。
+- MinerU 4.x 內建使用統計（遙測），會送到 mineru.net，在它的 `mineru` 指令裡預設是開啟的。pdf2md-local 呼叫的是 `mineru-kit`，不會載入那段程式；另外啟動 MinerU 時也一律設定 `MINERU_TELEMETRY_DISABLED=1` 和 `HF_HUB_DISABLE_TELEMETRY=1`。
+- 轉檔期間，pdf2md-local 自己唯一的網路連線是〈六、命名規則〉說的書目查詢，而且可以關掉。
+
+需要考慮的風險：
+- **信任第三方程式碼。** MinerU 和它的相依套件跟你安裝的任何程式一樣，用你的使用者權限執行，讀得到你的檔案。上面關於隱私的說明，是閱讀 MinerU 4.2.3 原始碼得出的，並沒有實際監看它的網路流量。如果你很在意，可以在模型下載完後用防火牆擋掉它的網路連線，或自己檢查流量。
+- **來源國。** 有些公司、大學和政府機關限制使用中國開發的軟體或 AI 模型。在公務電腦上安裝，或拿來處理機密文件之前，先確認所屬單位的規定。
+- **模型行為。** 模型由開發者用你無法檢視的資料訓練。用在版面分析和文字辨識上，實際的風險是辨識錯誤，而不是內容被扭曲；但引用前仍請對照原始 PDF。
+- **供應鏈。** 安裝程式從 PyPI 和 Hugging Face 下載，除了 pip 和 Hugging Face 本身的檢查外，沒有另外驗證雜湊值。如果上游的版本或模型遭到竄改，也會照樣被安裝。
+
 ## 一、最低需求
 
 pdf2md-local 一定要有 GPU。安裝程式第一步就會檢查，電腦不符合需求時，在下載任何東西之前就會停下來。
@@ -215,4 +237,4 @@ python -m unittest discover -s tests
 
 ## 授權
 
-MIT。MinerU 本身另有授權條款，請見它的 repo。
+pdf2md-local 採用 MIT 授權。MinerU 另有自己的授權條款，見〈主要依賴：MinerU（來源與風險）〉。

@@ -20,6 +20,28 @@ What it never does:
 - put a PDF in the output folder;
 - run MinerU with `--remote`.
 
+## The main dependency: MinerU, and what it means
+
+pdf2md-local is a thin wrapper. The conversion itself (layout, OCR, formulas, tables) is done entirely by [MinerU](https://github.com/opendatalab/MinerU), which the installer downloads from PyPI. Before installing, know where it comes from:
+
+| | |
+|---|---|
+| Developer | OpenDataLab, Shanghai Artificial Intelligence Laboratory (上海人工智能实验室), a state-backed research lab in China. |
+| Version | Pinned to 4.2.3; the installer never upgrades it. |
+| Models | Downloaded on the first conversion from Hugging Face (MinerU's default; ModelScope, run by Alibaba, is the alternative) into `~/.mineru`: the MinerU2.5 vision-language model (1.2B), plus layout and OCR models from Baidu's PaddlePaddle family (PP-DocLayout, PaddleOCR). |
+| License | "MinerU Open Source License": Apache 2.0 plus extra terms. A separate commercial license is needed above 100 million monthly users or USD 20 million monthly revenue, and online services built on it must say they use MinerU. Personal and research use on your own computer is not affected. |
+
+What pdf2md-local does about privacy:
+- MinerU runs **locally only**. pdf2md-local never passes `--remote`, which would upload the PDF to mineru.net.
+- MinerU 4.x contains usage telemetry (to mineru.net, on by default in its `mineru` command). pdf2md-local calls `mineru-kit`, which does not load that code, and in addition starts MinerU with `MINERU_TELEMETRY_DISABLED=1` and `HF_HUB_DISABLE_TELEMETRY=1`.
+- During conversion, the only network traffic pdf2md-local itself makes is the metadata lookup described under [Naming](#naming), which you can turn off.
+
+Risks to weigh:
+- **Trust in third-party code.** MinerU and its dependencies run with your user's permissions and can read your files, like any program you install. The privacy points above come from reading MinerU 4.2.3's code, not from monitoring its network traffic. If that matters to you, block the converter's network access with a firewall after the models are downloaded, or check the traffic yourself.
+- **Origin.** Some employers, universities and government bodies restrict software or AI models developed in China. Check your organisation's policy before installing it on a work computer or using it on confidential documents.
+- **Model behaviour.** The models are trained by their developers on data you cannot inspect. For layout analysis and text recognition, the practical risk is recognition errors, not slanted content. Still, check the md against the PDF before you quote it.
+- **Supply chain.** The installer installs from PyPI and Hugging Face without checking hashes beyond what pip and Hugging Face do. A compromised upstream release or model would be installed as it is.
+
 ## Minimum requirements
 
 pdf2md-local needs a GPU. The installer checks this first and stops before downloading anything if the computer falls short.
@@ -206,4 +228,4 @@ The tests use only the standard library and run with or without `psutil` and `wa
 
 ## License
 
-MIT. MinerU itself is licensed separately by its authors; see its repository.
+pdf2md-local is MIT. MinerU is licensed separately under its own terms; see [the section on MinerU](#the-main-dependency-mineru-and-what-it-means).

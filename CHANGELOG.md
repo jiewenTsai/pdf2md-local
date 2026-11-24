@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- One-line install and uninstall: `irm … | iex` on Windows, `curl … | sh` on macOS and Linux.
+- The installer's second hardware check (after MinerU is installed) requires 5 GB free instead of 15, which had refused a good install on a Mac with 13 GB left.
+- MinerU always runs with its telemetry and Hugging Face Hub telemetry turned off.
+- pip installs leave no download cache behind.
+- README: separate Install and Uninstall sections, and a section on MinerU's origin, license and risks.
+
 ## 1.0.0 (2026-11-24)
 
 First release. pdf2md-local is a standalone tool split off from pdf2md 3.4.0: it converts PDFs to Markdown on the computer it is installed on, and nothing else.

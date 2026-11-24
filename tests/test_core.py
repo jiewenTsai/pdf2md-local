@@ -193,5 +193,14 @@ class ServiceTextTest(unittest.TestCase):
         self.assertIn("<MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>", xml)
 
 
+
+class ToolEnvTest(unittest.TestCase):
+    def test_mineru_runs_with_telemetry_off(self):
+        env = pdf2md.tool_env_vars()
+        self.assertEqual(env["MINERU_TELEMETRY_DISABLED"], "1")
+        self.assertEqual(env["HF_HUB_DISABLE_TELEMETRY"], "1")
+        self.assertEqual(env["PYTHONUTF8"], "1")
+
+
 if __name__ == "__main__":
     unittest.main()

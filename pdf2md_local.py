@@ -607,10 +607,13 @@ def tool_paths(config, tool):
 
 
 def tool_env_vars():
-    """Tools read model files as UTF-8; non-UTF-8 Windows locales (e.g. cp950) break them otherwise."""
+    """Environment for MinerU: UTF-8 (non-UTF-8 Windows locales such as cp950 break its model files), and no
+    usage statistics sent anywhere (MinerU's Doclib telemetry, Hugging Face Hub telemetry)."""
     env = os.environ.copy()
     env["PYTHONUTF8"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
+    env["MINERU_TELEMETRY_DISABLED"] = "1"
+    env["HF_HUB_DISABLE_TELEMETRY"] = "1"
     return env
 
 
