@@ -7,8 +7,22 @@
 #   sh install.sh --uninstall   stop the watcher and remove the program (your folders and files stay)
 #
 # A computer below the minimum requirements stops at step 1, before anything is downloaded.
+#
+# One line, without downloading anything first:
+#   curl -fsSL https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.sh | sh -s -- --check
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
+
+# Piped into sh there is no checkout next to this script: fetch the repo into a temp folder and run its install.sh
+if [ ! -f "$HERE/pdf2md_local.py" ]; then
+    TMP="$(mktemp -d)"
+    trap 'rm -rf "$TMP"' EXIT
+    echo "Downloading pdf2md-local ..."
+    curl -fsSL "https://github.com/jiewenTsai/pdf2md-local/archive/refs/heads/main.tar.gz" | tar xz -C "$TMP"
+    sh "$TMP/pdf2md-local-main/install.sh" "$@"
+    exit $?
+fi
 HOME_DIR="$HOME/.pdf2md-local"
 APP="$HOME_DIR/app"
 ENV="$HOME_DIR/envs/mineru"

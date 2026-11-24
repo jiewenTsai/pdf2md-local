@@ -6,7 +6,30 @@
 #   powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall   stop the watcher and remove the program (folders stay)
 #
 # A computer below the minimum requirements stops at step 1, before anything is downloaded.
+#
+# One line, without downloading anything first:
+#   irm https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.ps1 | iex
+#   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.ps1))) -Check
 param([switch]$Check, [switch]$AcceptGpu, [switch]$Uninstall)
+
+# Run through irm | iex there is no script file: fetch the repo into a temp folder and run its
+# install.ps1 in a child PowerShell, so "exit" there never closes the user's window.
+if (-not $MyInvocation.MyCommand.Path) {
+    $tmp = Join-Path ([IO.Path]::GetTempPath()) ("pdf2md-local-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Force $tmp | Out-Null
+    Write-Host "Downloading pdf2md-local ..."
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -UseBasicParsing "https://github.com/jiewenTsai/pdf2md-local/archive/refs/heads/main.zip" -OutFile "$tmp\src.zip"
+    Expand-Archive "$tmp\src.zip" -DestinationPath $tmp
+    $childArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "$tmp\pdf2md-local-main\install.ps1")
+    if ($Check) { $childArgs += "-Check" }
+    if ($AcceptGpu) { $childArgs += "-AcceptGpu" }
+    if ($Uninstall) { $childArgs += "-Uninstall" }
+    & powershell.exe @childArgs
+    Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+    return
+}
+
 $ErrorActionPreference = "Stop"
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $HomeDir = Join-Path $env:USERPROFILE ".pdf2md-local"

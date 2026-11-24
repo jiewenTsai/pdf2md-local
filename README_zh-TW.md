@@ -53,7 +53,18 @@ pdf2md-local 一定要有 GPU。安裝程式第一步就會檢查，電腦不符
 
 ## 二、安裝
 
-下載或 clone 這個資料夾，在終端機進入資料夾後執行：
+在終端機貼上一行就好（會把這個 repo 下載到暫存資料夾，再執行安裝程式）：
+
+| 系統 | 指令 |
+|---|---|
+| Windows（PowerShell） | `irm https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.ps1 | iex` |
+| macOS、Linux | `curl -fsSL https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.sh | sh` |
+
+想先只檢查硬體：
+- Windows：`& ([scriptblock]::Create((irm https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.ps1))) -Check`
+- macOS、Linux：`curl -fsSL https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.sh | sh -s -- --check`
+
+也可以下載或 clone 這個資料夾，在終端機進入資料夾後執行：
 
 | 系統 | 指令 |
 |---|---|

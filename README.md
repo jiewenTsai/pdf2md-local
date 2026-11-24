@@ -45,7 +45,18 @@ Measured on 6 pages: RTX 3060 took 54 s; Intel UHD 770 took 851 s, with the same
 
 ## Install
 
-Download or clone this folder, then run:
+One line in a terminal (it downloads this repo into a temp folder and runs the installer):
+
+| OS | Command |
+|---|---|
+| Windows (PowerShell) | `irm https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.ps1 | iex` |
+| macOS, Linux | `curl -fsSL https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.sh | sh` |
+
+To only check the hardware first:
+- Windows: `& ([scriptblock]::Create((irm https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.ps1))) -Check`
+- macOS, Linux: `curl -fsSL https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/install.sh | sh -s -- --check`
+
+Or download or clone this folder, then run:
 
 | OS | Command |
 |---|---|
