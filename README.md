@@ -148,6 +148,47 @@ The watcher only converts files that haven't changed for 60 seconds, so a PDF th
 - `skipped/`: an md already exists.
 - `failed/`: see `pdf2md-local_log.txt` in the input folder.
 
+### Checking progress
+
+Open a new terminal window and use any of these:
+
+**Once, right now:**
+
+```sh
+pdf2md-local status
+```
+
+It shows:
+- whether the watcher is running;
+- the PDF being converted and how far it is (page and percentage);
+- how many PDFs are waiting;
+- counts of done, skipped and failed;
+- the last lines of the log.
+
+**A live progress bar:**
+
+```sh
+pdf2md-local run
+```
+
+If the watcher is converting a file, `run` follows its progress. Afterwards it converts whatever else is waiting in `input_pdf`. Ctrl+C stops only the watching; the background watcher carries on.
+
+**The log, as it is written:** each start, finish (with the time it took) and failure is one line.
+
+```sh
+tail -f ~/pdf2md-local/input_pdf/pdf2md-local_log.txt
+```
+
+```powershell
+Get-Content ~\pdf2md-local\input_pdf\pdf2md-local_log.txt -Wait -Tail 20
+```
+
+Use your own path if you moved `input_pdf`, and press Ctrl+C to stop.
+
+Normal pauses:
+- Before the very first PDF, MinerU downloads its models (2–3 GB), and the progress does not move meanwhile.
+- A newly dropped PDF shows as waiting until it has not changed for 60 seconds.
+
 ## Moving the folders
 
 You may move or rename `input_pdf` and `output_md` whenever you like, anywhere inside your home folder (Desktop, Documents, a Dropbox folder, …).

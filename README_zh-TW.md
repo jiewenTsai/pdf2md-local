@@ -156,6 +156,47 @@ curl -fsSL https://raw.githubusercontent.com/jiewenTsai/pdf2md-local/main/instal
 - `skipped/`：已經有 md，沒有重轉。
 - `failed/`：轉檔失敗，原因寫在 input 資料夾裡的 `pdf2md-local_log.txt`。
 
+### 查看轉檔進度
+
+開一個新的終端機視窗，用下面任一種方法。
+
+**看一次目前狀況：**
+
+```sh
+pdf2md-local status
+```
+
+它會顯示：
+- 監看程式有沒有在執行；
+- 正在轉哪一份 PDF，轉到第幾頁、百分之幾；
+- 還有幾份在等；
+- 已完成、略過、失敗各幾份；
+- 最近幾行紀錄。
+
+**即時進度條：**
+
+```sh
+pdf2md-local run
+```
+
+背景監看程式正在轉檔時，它會直接跟著顯示那一份的進度，接著再轉 `input_pdf` 裡其他還在等的 PDF。按 Ctrl+C 只會停止「看」，背景監看程式會繼續轉。
+
+**持續看紀錄：** 每份 PDF 開始、轉完（含花了幾秒）和失敗都會各寫一行。
+
+```sh
+tail -f ~/pdf2md-local/input_pdf/pdf2md-local_log.txt
+```
+
+```powershell
+Get-Content ~\pdf2md-local\input_pdf\pdf2md-local_log.txt -Wait -Tail 20
+```
+
+第一個指令用在 macOS、Linux，第二個用在 Windows。搬過 `input_pdf` 的話，把路徑換成新的位置；看完按 Ctrl+C 離開。
+
+正常的停頓：
+- 第一份 PDF 開始前，MinerU 要先下載 2–3 GB 的模型，這段時間進度不會動。
+- 剛丟進去的 PDF 要 60 秒沒有變動才會開始轉，之前會顯示為等待中。
+
 ## 五、資料夾可以隨時搬動或改名
 
 `input_pdf` 和 `output_md` 可以隨時搬到家目錄底下的任何地方，例如桌面、文件或 Dropbox 資料夾，也可以改名。
