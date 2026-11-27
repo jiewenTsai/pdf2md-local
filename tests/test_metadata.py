@@ -180,5 +180,123 @@ class IndexTest(unittest.TestCase):
         self.assertEqual(found.parent.name, "hollis_2012_value-feedback-project-based")
 
 
+def xmp(title=None, doi=None):
+    parts = [b'<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description>']
+    if title:
+        parts.append(b"<dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">" + title + b"</rdf:li></rdf:Alt></dc:title>")
+    if doi:
+        parts.append(b"<prism:doi>" + doi + b"</prism:doi>")
+    parts.append(b"</rdf:Description></rdf:RDF>")
+    return b"".join(parts)
+
+
+class DoiMatchTest(unittest.TestCase):
+    """Finding an already converted paper by DOI before conversion."""
+
+    TITLE = "Gibbs sampling for rating scale models with many dimensions"
+
+    def setUp(self):
+        self._temp = tempfile.TemporaryDirectory()
+        root = Path(self._temp.name)
+        self.output = root / "output"
+        folder = self.output / "okafor_2024_gibbs-sampling-rating"
+        folder.mkdir(parents=True)
+        self.md = folder / "okafor_2024_gibbs-sampling-rating.md"
+        self.md.write_text(f"# {self.TITLE}\n", encoding="utf-8")
+        pdf2md.add_index_entry(self.output, {"sha256": "0" * 64, "folder": folder.name, "doi": "10.5555/example.2024.321",
+                                             "title": self.TITLE, "source_pdf": "okafor.pdf"})
+        self.pdf = root / "copy.pdf"
+
+    def tearDown(self):
+        self._temp.cleanup()
+
+    def found(self, data):
+        self.pdf.write_bytes(b"%PDF-1.7\n" + data)
+        return pdf2md.find_existing_by_doi(self.output, self.pdf)
+
+    def test_figure_xmp_title_does_not_veto_the_papers_own_doi(self):
+        figure = xmp(b"Adobe Illustrator Artwork")
+        paper = xmp(self.TITLE.encode(), b"10.5555/example.2024.321")
+        self.assertEqual(self.found(figure + b"\n" + paper), self.md)
+        self.assertEqual(self.found(xmp(b"R Graphics Output", b"10.5555/example.2024.321")), self.md)
+
+    def test_doi_with_another_title_in_the_same_packet_is_not_a_duplicate(self):
+        self.assertIsNone(self.found(xmp(b"A completely different paper about rating scales", b"10.5555/example.2024.321")))
+
+    def test_reference_link_alone_is_not_a_duplicate(self):
+        link = b"<< /S /URI /URI (https://doi.org/10.5555/example.2024.321) >>"
+        self.assertIsNone(self.found(link))
+        self.assertIsNone(self.found(link + b"<< /Title (Some other paper on Bayesian methods) >>"))
+
+    def test_link_with_matching_info_title_is_a_duplicate(self):
+        link = b"<< /S /URI /URI (https://doi.org/10.5555/example.2024.321) >>"
+        info = b"<< /Title (" + self.TITLE.encode() + b") /Producer (pdfTeX) >>"
+        self.assertEqual(self.found(link + info), self.md)
+
+    def test_info_title_strings_are_decoded(self):
+        self.assertEqual(pdf2md.info_title(rb"<< /Title (Volume 29 \(2\): a (nested) title) >>"),
+                         "Volume 29 (2): a (nested) title")
+        self.assertEqual(pdf2md.info_title(rb"<< /Title (Children\222s reading \
+in three schools) >>"), "Children\x92s reading in three schools")
+        utf16 = ("\ufeff" + "Ålund et al. on ordinal data").encode("utf-16-be")
+        self.assertEqual(pdf2md.info_title(b"<< /Title <" + utf16.hex().encode() + b"> >>"), "Ålund et al. on ordinal data")
+        self.assertIsNone(pdf2md.info_title(b"<< /Title (Microsoft Word - final_v2.docx) >>"))
+        self.assertIsNone(pdf2md.info_title(b"<< /Title (Introduction) >>"))
+
+    def test_info_dictionary_doi_is_paired_with_its_title(self):
+        info = b"<< /Title (" + self.TITLE.encode() + b") /doi (10.5555/example.2024.321) >>"
+        self.assertEqual(pdf2md.pdf_metadata_records(self.write(info)), [("10.5555/example.2024.321", self.TITLE)])
+        self.assertEqual(self.found(info), self.md)
+
+    def write(self, data):
+        self.pdf.write_bytes(b"%PDF-1.7\n" + data)
+        return self.pdf
+
+
+
+class LengthRuleTest(unittest.TestCase):
+    """Same DOI and title but very different length: a summary and the paper are kept apart."""
+
+    setUp, tearDown, convert = IndexTest.setUp, IndexTest.tearDown, IndexTest.convert
+
+    TITLE = "Approximate inference for latent rating models using nested approximations"
+    DOI = "10.5555/example.2009.700"
+
+    def convert_with_meta(self, pdf, md_text):
+        meta = {"title": self.TITLE, "doi": self.DOI, "surname": "Mendes", "year": "2009"}
+        with mock.patch.object(pdf2md, "choose_name",
+                               return_value=("mendes_2009_approximate-inference-latent", meta, "crossref-title")):
+            return self.convert(pdf, md_text)
+
+    def test_summary_and_paper_are_both_kept_and_doi_finds_the_paper(self):
+        summary = self.inbox / "summary.pdf"
+        summary.write_bytes(b"%PDF summary")
+        self.assertEqual(self.convert_with_meta(summary, f"# {self.TITLE}\n\nA short review.\n" + "x" * 2000), "done")
+        paper = self.inbox / "paper.pdf"
+        paper.write_bytes(b"%PDF paper")
+        self.assertEqual(self.convert_with_meta(paper, f"# {self.TITLE}\n\n" + "y" * 50000), "done")
+        first = self.output / "mendes_2009_approximate-inference-latent"
+        second = self.output / "mendes_2009_approximate-inference-latent_2"
+        self.assertTrue((first / f"{first.name}.md").exists())
+        self.assertTrue((second / f"{second.name}.md").exists())
+        self.assertIn("Kept separately", self.log_file.read_text(encoding="utf-8"))
+        # A DOI lookup now finds the longer md (the paper), not the summary
+        self.assertEqual(pdf2md.find_md_by_doi(self.output, [self.DOI], self.TITLE).parent, second)
+
+    def test_similar_length_is_still_the_same_paper(self):
+        first = self.inbox / "preprint.pdf"
+        first.write_bytes(b"%PDF preprint")
+        self.assertEqual(self.convert_with_meta(first, f"# {self.TITLE}\n\n" + "y" * 40000), "done")
+        second = self.inbox / "published.pdf"
+        second.write_bytes(b"%PDF published")
+        self.assertEqual(self.convert_with_meta(second, f"# {self.TITLE}\n\n" + "z" * 50000), "skipped")
+        self.assertFalse((self.output / "mendes_2009_approximate-inference-latent_2").exists())
+
+    def test_lengths_differ(self):
+        self.assertTrue(pdf2md.lengths_differ(13000, 150000))
+        self.assertFalse(pdf2md.lengths_differ(40000, 50000))
+        self.assertFalse(pdf2md.lengths_differ(None, 50000))
+
+
 if __name__ == "__main__":
     unittest.main()

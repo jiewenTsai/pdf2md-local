@@ -215,6 +215,12 @@ Only the DOI, arXiv id or title is sent to api.crossref.org / export.arxiv.org; 
 
 `output_md/pdf2md-local_index.json` maps each PDF's SHA-256 to its folder, so a second copy of the same paper is not converted again.
 
+How a PDF is recognised as a paper that is already converted:
+- the same file (SHA-256), even under another name;
+- the DOI in the PDF's own metadata, unless the title stored next to it names another paper;
+- a DOI that only appears in a link (for example in the reference list) counts only when the PDF's title matches too, so a paper that cites a converted paper is not mistaken for it;
+- after conversion, the same DOI or title, unless one md is more than 3 times as long as the other. A short summary, supplement or erratum of a paper is then kept in its own folder (with `_2`), and the log says "Kept separately".
+
 Each md starts with YAML front matter:
 - `source_pdf`, `tool`, `tool_version` and `converted`;
 - `title`, `doi`, `named_from` and `source_sha256`.

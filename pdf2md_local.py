@@ -27,6 +27,7 @@ import datetime
 import json
 import os
 import platform
+import html
 import re
 import shutil
 import subprocess
@@ -40,7 +41,7 @@ import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 APP = "pdf2md-local"
 
 IS_WINDOWS = os.name == "nt"
@@ -77,6 +78,8 @@ def first_author_surname(author_text):
     text = author_text.strip()
     text = re.sub(r"\s*(?:et al\.?|(?:…|\.{3})?\s*等人?)$", "", text)
     first_author = re.split(r"\s+and\s+|\s*[和與与&]\s*|,|，|、", text)[0]
+    # Leading initials are not part of the surname: "J. Hollis", "J.K. Hollis", "J.-K. Hollis", "J Hollis"
+    first_author = re.sub(r"^(?:[A-Z](?:\.-?[A-Z])*\.?\s+)+(?=\S)", "", first_author.strip())
     surname = first_author.strip().replace(" ", "-")
     return surname
 
@@ -161,8 +164,25 @@ INDEX_NAME = "pdf2md-local_index.json"
 HTTP_TIMEOUT = 15
 USER_AGENT = f"pdf2md-local/{__version__} (local file naming; python-urllib)"
 DOI_PATTERN = re.compile(r"\b(10\.\d{4,9}/[^\s\"'<>()\[\]{},;]+)", re.I)
+# Only the PDF's own metadata: XMP keys, or a /doi key of the document info dictionary ("/doi (10....)").
+# A bare "/doi" also matched link annotations such as "https://doi.org/10...." in the reference list, so a
+# paper that cited an already converted paper was skipped as that paper.
 PDF_DOI_PATTERN = re.compile(
-    rb"(?:prism:doi|pdfx:doi|crossmark:doi|dc:identifier|/doi)[^0-9]{0,40}(10\.\d{4,9}/[^\s<>()\"'\[\]]+)", re.I)
+    rb"(?:(?:prism:doi|pdfx:doi|crossmark:doi|dc:identifier)[^0-9]{0,40}|/doi\s*\(\s*)(10\.\d{4,9}/[^\s<>()\"'\[\]]+)", re.I)
+# Any DOI in the raw bytes, link annotations included. These may be the paper's own DOI or cited ones, so they
+# are used only together with a matching title (see find_existing_by_doi).
+PDF_LINKED_DOI_PATTERN = re.compile(rb"(?:/doi|doi\.org/)[^0-9]{0,40}(10\.\d{4,9}/[^\s<>()\"'\[\]]+)", re.I)
+# A title belongs to the metadata block it is in: an XMP packet, or a dictionary such as the document info.
+# Embedded figures carry XMP packets of their own ("Adobe Illustrator Artwork", "R Graphics Output"), so the
+# first title in the file is not necessarily the paper's.
+PDF_XMP_PACKET = re.compile(rb"<rdf:RDF\b.*?</rdf:RDF>", re.I | re.S)
+PDF_XMP_TITLE = re.compile(rb"<dc:title\b[^>]*>(.*?)</dc:title>", re.I | re.S)
+PDF_XMP_LI = re.compile(rb"<rdf:li\b[^>]*>(.*?)</rdf:li>", re.I | re.S)
+PDF_INFO_TITLE_KEY = re.compile(rb"/Title\s*([(<])")
+# Titles that PDF software writes by itself; never a paper title
+JUNK_TITLE = re.compile(
+    r"^(microsoft (word|powerpoint|excel)\b|adobe illustrator|r graphics output|untitled|uuid:|xmp\.did:)"
+    r"|\.(docx?|pptx?|tex|dvi|indd|qxd|ps|eps|ai|pdf)\b", re.I)
 ARXIV_HEAD_PATTERN = re.compile(r"arxiv[:\s]*(\d{4}\.\d{4,5})(?:v\d+)?", re.I)
 ARXIV_NAME_PATTERN = re.compile(r"^(?:arxiv[_.-]?)?(\d{4}\.\d{4,5})(?:v\d+)?$", re.I)
 REFERENCES_HEADING = re.compile(r"^#+\s*(references|bibliography|參考文獻|参考文献)\b", re.I | re.M)
@@ -323,8 +343,8 @@ def arxiv_by_id(arxiv_id):
         return None
 
 
-def pdf_embedded_dois(pdf_path):
-    """DOIs in the PDF's own metadata (XMP or document info), read from the raw bytes."""
+def pdf_chunks(pdf_path):
+    """The first 2 MiB and, for larger files, the last 1 MiB (where the document info often is)."""
     try:
         size = Path(pdf_path).stat().st_size
         with open(pdf_path, "rb") as handle:
@@ -334,11 +354,12 @@ def pdf_embedded_dois(pdf_path):
                 chunks.append(handle.read())
     except OSError:
         return []
-    found = []
-    for chunk in chunks:
-        for match in PDF_DOI_PATTERN.finditer(chunk):
-            found.append(clean_doi(match.group(1).decode("latin-1")))
-    return list(dict.fromkeys(found))
+    return chunks
+
+
+def pdf_embedded_dois(pdf_path):
+    """DOIs in the PDF's own metadata (XMP or document info), read from the raw bytes."""
+    return list(dict.fromkeys(doi for doi, _ in pdf_metadata_records(pdf_path)))
 
 
 def arxiv_id_for(pdf_path, head):
@@ -493,16 +514,173 @@ def find_md(pdf_path, output_root, sha=None):
     return existing_folder_md(output_root, output_name_for(pdf_path))
 
 
-def find_md_by_doi(output_root, dois):
+def find_md_by_doi(output_root, dois, titles=None, require_title=False):
+    """The md of an indexed paper with one of these DOIs.
+
+    titles: this PDF's title, or several candidates. When candidates and the indexed title are both known,
+    one candidate must match, so a DOI picked up by mistake cannot make two papers one.
+    require_title: only accept an entry whose title matches (for DOIs that may be cited ones)."""
     wanted = {doi for doi in dois if doi}
     if not wanted:
         return None
+    candidates = [titles] if isinstance(titles, str) else [title for title in (titles or []) if title]
+    found = []
     for entry in load_index(output_root)["entries"]:
         if entry.get("doi") in wanted and entry.get("folder"):
+            if require_title and not (candidates and entry.get("title")):
+                continue
+            if candidates and entry.get("title") and not any(titles_match(entry["title"], c) for c in candidates):
+                continue
             candidate = existing_folder_md(output_root, entry["folder"])
-            if candidate:
-                return candidate
+            if candidate and candidate not in found:
+                found.append(candidate)
+    # Several documents can share a DOI (a paper and a summary of it, kept apart): the longest one
+    # is the paper
+    return max(found, key=lambda md: md_body_length(md) or 0) if found else None
+
+
+def pdf_linked_dois(pdf_path):
+    """DOIs anywhere in the raw bytes, including links in the reference list; never trusted without a title."""
+    found = []
+    for chunk in pdf_chunks(pdf_path):
+        found.extend(clean_doi(m.group(1).decode("latin-1")) for m in PDF_LINKED_DOI_PATTERN.finditer(chunk))
+    return list(dict.fromkeys(found))
+
+
+def find_existing_by_doi(output_root, pdf_path):
+    """Before conversion: each metadata DOI, checked against the title of the same metadata block when it has
+    one; then DOIs from links, accepted only when one of the PDF's titles matches the indexed title."""
+    for doi, title in pdf_metadata_records(pdf_path):
+        existing = find_md_by_doi(output_root, [doi], title)
+        if existing is not None:
+            return existing
+    titles = pdf_embedded_titles(pdf_path)
+    if titles:
+        return find_md_by_doi(output_root, pdf_linked_dois(pdf_path), titles, require_title=True)
     return None
+
+
+PDF_ESCAPES = {ord("n"): b"\n", ord("r"): b"\r", ord("t"): b"\t", ord("b"): b"\b", ord("f"): b"\f"}
+
+
+def pdf_literal_string(data, start):
+    """The bytes of the PDF literal string whose "(" is at data[start]: escapes, octal codes and balanced
+    parentheses; None when it is not terminated."""
+    out, depth, i = bytearray(), 0, start + 1
+    while i < len(data):
+        c = data[i]
+        if c == 0x5C:  # backslash
+            i += 1
+            if i >= len(data):
+                break
+            c = data[i]
+            if c in PDF_ESCAPES:
+                out += PDF_ESCAPES[c]
+            elif 0x30 <= c <= 0x37:
+                octal = re.match(rb"[0-7]{1,3}", data[i:i + 3]).group(0)
+                out.append(int(octal, 8) & 0xFF)
+                i += len(octal) - 1
+            elif c == 0x0D:  # line continuation
+                if data[i + 1:i + 2] == b"\n":
+                    i += 1
+            elif c != 0x0A:
+                out.append(c)
+        elif c == 0x28:
+            depth += 1
+            out.append(c)
+        elif c == 0x29:
+            if depth == 0:
+                return bytes(out)
+            depth -= 1
+            out.append(c)
+        else:
+            out.append(c)
+        i += 1
+    return None
+
+
+def pdf_text(raw):
+    """Text of a PDF string: UTF-16 with a byte-order mark, else UTF-8, else PDFDocEncoding (close to Latin-1)."""
+    if raw.startswith(b"\xfe\xff"):
+        return raw[2:].decode("utf-16-be", errors="ignore")
+    if raw.startswith(b"\xff\xfe"):
+        return raw[2:].decode("utf-16-le", errors="ignore")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("latin-1")
+
+
+def clean_title(text):
+    """A usable paper title, or None for empty, too short or software-made titles."""
+    if not text:
+        return None
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = html.unescape(text) if "&" in text else text
+    text = " ".join(text.split())
+    if len(text.split()) < 3 or JUNK_TITLE.search(text):
+        return None
+    return text
+
+
+def xmp_title(packet):
+    """dc:title of one XMP packet."""
+    match = PDF_XMP_TITLE.search(packet)
+    if not match:
+        return None
+    for item in PDF_XMP_LI.findall(match.group(1)) or [match.group(1)]:
+        title = clean_title(item.decode("utf-8", errors="ignore"))
+        if title:
+            return title
+    return None
+
+
+def info_title(block):
+    """/Title of a PDF dictionary, as a literal or hex string."""
+    for match in PDF_INFO_TITLE_KEY.finditer(block):
+        if match.group(1) == b"(":
+            raw = pdf_literal_string(block, match.start(1))
+        else:
+            end = block.find(b">", match.start(1))
+            digits = re.sub(rb"\s", b"", block[match.start(1) + 1:end]) if end > 0 else b""
+            try:
+                raw = bytes.fromhex((digits + b"0" * (len(digits) % 2)).decode("ascii"))
+            except ValueError:
+                raw = None
+        title = clean_title(pdf_text(raw)) if raw else None
+        if title:
+            return title
+    return None
+
+
+def enclosing_dict(data, pos):
+    """The dictionary << ... >> around data[pos] (a document info holds no nested dictionaries)."""
+    start, end = data.rfind(b"<<", 0, pos), data.find(b">>", pos)
+    return data[start:end + 2] if start >= 0 and end >= 0 else b""
+
+
+def pdf_metadata_records(pdf_path):
+    """(doi, title) for each DOI in the PDF's own metadata. The title comes from the same XMP packet or
+    dictionary, or is None when that block has no usable one."""
+    records = []
+    for chunk in pdf_chunks(pdf_path):
+        packets = [(m.start(), m.end()) for m in PDF_XMP_PACKET.finditer(chunk)]
+        for match in PDF_DOI_PATTERN.finditer(chunk):
+            doi = clean_doi(match.group(1).decode("latin-1"))
+            packet = next((chunk[s:e] for s, e in packets if s <= match.start() < e), None)
+            title = xmp_title(packet) if packet is not None else info_title(enclosing_dict(chunk, match.start()))
+            records.append((doi, title))
+    return list(dict.fromkeys(records))
+
+
+def pdf_embedded_titles(pdf_path):
+    """Every usable title in the PDF's metadata: XMP packets and /Title entries (the document info, but also
+    figures and bookmarks). Only used with a DOI from the same PDF and a matching indexed title."""
+    titles = []
+    for chunk in pdf_chunks(pdf_path):
+        titles.extend(xmp_title(m.group(0)) for m in PDF_XMP_PACKET.finditer(chunk))
+        titles.extend(info_title(chunk[m.start():m.start() + 4096]) for m in PDF_INFO_TITLE_KEY.finditer(chunk))
+    return list(dict.fromkeys(title for title in titles if title))
 
 
 def existing_md_title(md_file):
@@ -1532,13 +1710,34 @@ def remember_alias(output_root, pdf_path, sha, existing_md):
                                   "sha256": sha, "added": datetime.date.today().isoformat()})
 
 
-def free_folder_name(output_root, name, title):
-    """(name, existing_md): reuse nothing, never overwrite. Same title in a taken folder = same paper."""
+# Same DOI or title but one md this many times longer than the other: not the same document (a 3-page
+# summary or review of a paper, a supplement, an erratum), so both are kept
+LENGTH_RATIO = 3.0
+
+
+def md_body_length(md_file):
+    """Characters of an md without its front matter, or None when it cannot be read."""
+    try:
+        return len(md_body(Path(md_file).read_text(encoding="utf-8")))
+    except OSError:
+        return None
+
+
+def lengths_differ(length_a, length_b):
+    if not length_a or not length_b:
+        return False
+    return max(length_a, length_b) > LENGTH_RATIO * min(length_a, length_b)
+
+
+def free_folder_name(output_root, name, title, length=None):
+    """(name, existing_md): reuse nothing, never overwrite. Same title in a taken folder = same paper, unless
+    the two mds differ a lot in length."""
     candidate, counter = name, 2
     while folder_taken(output_root, candidate):
         existing = existing_folder_md(output_root, candidate)
         if existing and title and titles_match(existing_md_title(existing), title, threshold=0.92):
-            return candidate, existing
+            if not lengths_differ(length, md_body_length(existing)):
+                return candidate, existing
         candidate = f"{name}_{counter}"
         counter += 1
     return candidate, None
@@ -1549,7 +1748,7 @@ def process_one(config, pdf_path, tool, version, output_root, done_dir, log_file
     sha = file_sha256(pdf_path)
     existing = find_md(pdf_path, output_root, sha)
     if existing is None:
-        existing = find_md_by_doi(output_root, pdf_embedded_dois(pdf_path))
+        existing = find_existing_by_doi(output_root, pdf_path)
     if existing is not None:
         log(log_file, f"Skipped (md exists): {pdf_path.name} -> {existing}")
         if existing != md_path_for(pdf_path, output_root):
@@ -1568,9 +1767,15 @@ def process_one(config, pdf_path, tool, version, output_root, done_dir, log_file
         work_dir = Path(temp_text)
         md_path = convert_with_mineru(config, pdf_path, work_dir)
         name, meta, how = choose_name(pdf_path, md_path.read_text(encoding="utf-8"), config)
-        duplicate = find_md_by_doi(output_root, [meta.get("doi")])
+        length = len(md_body(md_path.read_text(encoding="utf-8")))
+        duplicate = find_md_by_doi(output_root, [meta.get("doi")], meta.get("title"))
+        if duplicate is not None and lengths_differ(length, md_body_length(duplicate)):
+            log(log_file, f"Kept separately: {pdf_path.name} has the DOI of {duplicate.parent.name}, but its md is "
+                          f"{length} characters against {md_body_length(duplicate)} (a summary, supplement or "
+                          f"the full paper?); check which is which")
+            duplicate = None
         if duplicate is None:
-            name, duplicate = free_folder_name(output_root, name, meta.get("title"))
+            name, duplicate = free_folder_name(output_root, name, meta.get("title"), length)
         if duplicate is not None:
             remember_alias(output_root, pdf_path, sha, duplicate)
             log(log_file, f"Skipped (same paper already converted): {pdf_path.name} -> {duplicate}")

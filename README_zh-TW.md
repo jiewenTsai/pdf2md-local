@@ -225,6 +225,12 @@ Zotero 格式的檔名（`作者 - 2021 - 標題.pdf`）直接沿用。
 
 `output_md/pdf2md-local_index.json` 記錄每份 PDF 的 SHA-256 對應到哪個資料夾。同一篇論文換了檔名再丟進來，也不會重轉。
 
+判斷一份 PDF「已經轉過」的依據：
+- 同一個檔案（SHA-256 相同），就算換了檔名也算；
+- PDF 本身 metadata 裡的 DOI，除非同一處記錄的標題是另一篇論文；
+- 只出現在連結裡的 DOI（例如參考文獻），必須 PDF 的標題也對得上才算，所以引用了某篇論文的 PDF 不會被誤認成那一篇；
+- 轉檔後 DOI 或標題相同，但其中一份 md 的長度超過另一份的 3 倍時不算重複。這時論文的摘要、補充資料或勘誤會另外存在加上 `_2` 的資料夾，log 會寫「Kept separately」。
+
 每份 md 的最前面有 YAML front matter：
 - `source_pdf`、`tool`、`tool_version`、`converted`；
 - `title`、`doi`、`named_from`、`source_sha256`。

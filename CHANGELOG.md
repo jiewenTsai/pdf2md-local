@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.1 (2026-11-27)
+
+Fixes to how an already converted paper is recognised. They come from the same fixes in pdf2md, where a real collection of 106 papers showed them.
+- A DOI in a link (such as `doi.org/10....` in the reference list) no longer counts as the paper's own DOI. Before, a paper that cited an already converted paper was skipped as that paper, and the mistake was remembered in the index.
+- A metadata DOI is checked against the title in the **same** metadata block (XMP packet or document info). Titles of embedded figures and software-made titles ("Microsoft Word - x.docx", "R Graphics Output") are ignored. Document-info strings are decoded properly, and the end of large files is read too.
+- A DOI from a link counts when one of the PDF's titles matches the indexed title.
+- After conversion, the same DOI or title with one md more than 3 times as long as the other is kept as a separate document (a summary, supplement or erratum). When several mds share a DOI, the longest one is found.
+- Initials before the first author's surname in Zotero file names are dropped ("J. Hollis - 2026 - ..." becomes `hollis_2026_...`).
+
 ## 1.1.0 (2026-11-25)
 
 - One-line install and uninstall: `irm … | iex` on Windows, `curl … | sh` on macOS and Linux.

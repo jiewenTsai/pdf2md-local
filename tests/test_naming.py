@@ -9,6 +9,8 @@ import pdf2md_local as pdf2md  # noqa: E402
 
 # Made-up file names in every shape the rules handle, with the folder names they must get
 KNOWN_NAMES = {
+    "J. Hollis - 2026 - Explanatory rating models for continuous data A tutorial in R.pdf":
+        "hollis_2026_explanatory-rating-models-continuous",
     "Rivera et al. - 2026 - A Gentle Introduction to Bayesian Networks For Teachers and Researchers.pdf":
         "rivera_2026_gentle-introduction-bayesian-networks",
     "Okafor et al. - 2021 - Variational inference for multidimensional rating scal.pdf":
@@ -43,6 +45,10 @@ AUTHOR_VARIANTS = {
     "Mendes and Okafor": "Mendes",
     "Mendes & Okafor": "Mendes",
     "Rivera et al.": "Rivera",
+    "J. Hollis": "Hollis",
+    "J.K. Hollis": "Hollis",
+    "J.-K. Hollis": "Hollis",
+    "A. B. Smith and Lee": "Smith",
     "van der Berg": "van-der-Berg",
 }
 
