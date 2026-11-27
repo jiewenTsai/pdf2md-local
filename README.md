@@ -189,6 +189,31 @@ Normal pauses:
 - Before the very first PDF, MinerU downloads its models (2–3 GB), and the progress does not move meanwhile.
 - A newly dropped PDF shows as waiting until it has not changed for 60 seconds.
 
+## Recheck skipped PDFs (after upgrading from 1.1.0 or earlier)
+
+Versions up to 1.1.0 could skip a new paper as one it only cites, and remembered that mistake in the index, so upgrading alone does not bring those PDFs back. To find them, run:
+
+```sh
+pdf2md-local recheck
+```
+
+It looks at every PDF in `input_pdf/skipped/` and changes nothing:
+
+| Shown as | Meaning |
+|---|---|
+| `same file` | The very PDF an md was made from. |
+| `copy` | Still recognised as a copy: today's rules, or the folder's title on the PDF's first page. |
+| `MISTAKE` | Skipped by mistake: the folder's title is not on its first page, or it is an appendix of that paper. |
+| `CHECK` | A copy by title, but the PDF is much longer than the md, so that folder may hold slides or a summary under the paper's name. Open the md; if it is not the paper, rename the folder and its md, then move the PDF back to `input_pdf`. |
+
+To fix the mistakes:
+
+```sh
+pdf2md-local recheck --apply
+```
+
+This backs up the index into `input_pdf`, removes the wrong entries, and moves those PDFs back to `input_pdf`, where the watcher converts them. If a conversion is running, it stops without changing anything; run it again later.
+
 ## Moving the folders
 
 You may move or rename `input_pdf` and `output_md` whenever you like, anywhere inside your home folder (Desktop, Documents, a Dropbox folder, …).
@@ -241,6 +266,7 @@ Each md starts with YAML front matter:
 | `watch` | Run the watcher in the foreground (the service runs this). |
 | `hardware [--require] [--accept-gpu]` | Does this computer meet the minimum requirements? |
 | `doctor` | Config, folders, MinerU, GPU, service. |
+| `recheck [--apply]` | Find PDFs in `skipped/` that older versions skipped by mistake; `--apply` sends them back to be converted. |
 | `index rebuild [--offline]` | Record existing output folders in the index (nothing is renamed). |
 
 How the watcher is kept running:

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.0 (2026-11-27)
+
+- **New command `recheck [--apply]`.** It finds PDFs in `input_pdf/skipped/` that versions up to 1.1.0 skipped by mistake. Each PDF is shown as `same file`, `copy`, `MISTAKE` or `CHECK`. The folder's title is looked for on the PDF's first page (with pypdfium2, which comes with MinerU) or in its file name. `--apply` backs up the index, removes the wrong entries and sends those PDFs back to be converted. Without `--apply`, nothing changes.
+
 ## 1.1.2 (2026-11-27)
 
 - Appendices, supplements and errata are documents of their own. An md whose own title starts with "Appendix", "Supplementary", "Supporting information", "Erratum", "Corrigendum" or "Correction to" is saved as `<paper name>_appendix` (or `_supplement`, `_erratum`), never skipped as its paper. Its index entry has no DOI, so a DOI lookup still finds the paper. Before, Crossref gave an appendix its paper's DOI, and the appendix was skipped as the paper.

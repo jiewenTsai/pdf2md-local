@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -343,6 +344,76 @@ class SupplementTest(unittest.TestCase):
         self.assertEqual(pdf2md.supplement_kind("Supporting Information"), "supplement")
         self.assertEqual(pdf2md.supplement_kind("Erratum to: A paper"), "erratum")
         self.assertIsNone(pdf2md.supplement_kind("A supplement-free paper on rating scales"))
+
+
+
+class RecheckTest(unittest.TestCase):
+    """`recheck` finds PDFs that older rules skipped by mistake, and --apply sends them back."""
+
+    setUp, tearDown, convert = IndexTest.setUp, IndexTest.tearDown, IndexTest.convert
+    TITLE = "Variational inference for rating scale models with many dimensions"
+    NAME = "okafor_2024_variational-inference-rating"
+
+    def prepare(self):
+        meta = {"title": self.TITLE, "doi": "10.5555/example.2024.11", "surname": "Okafor", "year": "2024"}
+        paper = self.inbox / "paper.pdf"
+        paper.write_bytes(b"%PDF the paper")
+        with mock.patch.object(pdf2md, "choose_name", return_value=(self.NAME, meta, "crossref-doi")):
+            self.assertEqual(self.convert(paper, f"# {self.TITLE}\n\n" + "y" * 20000), "done")
+        skipped = self.inbox / "skipped"
+        skipped.mkdir()
+        files = {
+            "same.pdf": b"%PDF the paper",
+            "Other - 2020 - Something else entirely about item position effects.pdf": b"%PDF other",
+            f"Okafor - 2024 - {self.TITLE}.pdf": b"%PDF published copy",
+            f"appendix - Appendix to {self.TITLE}.pdf": b"%PDF appendix",
+        }
+        for name, data in files.items():
+            (skipped / name).write_bytes(data)
+            if name != "same.pdf":  # aliases written by older rules
+                pdf2md.add_index_entry(self.output, {"folder": self.NAME, "source_pdf": name,
+                                                     "sha256": pdf2md.file_sha256(skipped / name)})
+        return skipped
+
+    def verdicts(self):
+        return {pdf.name: verdict for pdf, verdict, *_ in pdf2md.recheck_skipped(self.inbox, self.output)}
+
+    def test_verdicts(self):
+        self.prepare()
+        with mock.patch.object(pdf2md, "pdf_text_and_pages", return_value=(None, None)):
+            verdicts = self.verdicts()
+        self.assertEqual(verdicts["same.pdf"], "same file")
+        self.assertEqual(verdicts["Other - 2020 - Something else entirely about item position effects.pdf"], "wrong")
+        self.assertEqual(verdicts[f"Okafor - 2024 - {self.TITLE}.pdf"], "copy")
+        self.assertEqual(verdicts[f"appendix - Appendix to {self.TITLE}.pdf"], "wrong")
+
+    def test_long_pdf_against_short_md_is_left_to_check_by_hand(self):
+        self.prepare()
+        with mock.patch.object(pdf2md, "pdf_text_and_pages", return_value=(f"{self.TITLE} by A. Okafor", 60)):
+            self.assertEqual(self.verdicts()[f"Okafor - 2024 - {self.TITLE}.pdf"], "check")
+
+    def test_apply_removes_wrong_entries_and_sends_the_pdfs_back(self):
+        skipped = self.prepare()
+        args = SimpleNamespace(inbox=self.inbox, output=self.output, apply=True)
+        with mock.patch.object(pdf2md, "pdf_text_and_pages", return_value=(None, None)):
+            self.assertEqual(pdf2md.cmd_recheck(args, {}), 0)
+        self.assertTrue((self.inbox / "Other - 2020 - Something else entirely about item position effects.pdf").exists())
+        self.assertTrue((self.inbox / f"appendix - Appendix to {self.TITLE}.pdf").exists())
+        self.assertTrue((skipped / f"Okafor - 2024 - {self.TITLE}.pdf").exists())
+        self.assertTrue((skipped / "same.pdf").exists())
+        sources = [e.get("source_pdf") for e in pdf2md.load_index(self.output)["entries"]]
+        self.assertNotIn("Other - 2020 - Something else entirely about item position effects.pdf", sources)
+        self.assertIn(f"Okafor - 2024 - {self.TITLE}.pdf", sources)
+        self.assertEqual(len(list(self.inbox.glob(f"{pdf2md.INDEX_NAME}.backup-*"))), 1)
+
+    def test_without_apply_nothing_changes(self):
+        skipped = self.prepare()
+        before = pdf2md.index_path(self.output).read_bytes()
+        args = SimpleNamespace(inbox=self.inbox, output=self.output, apply=False)
+        with mock.patch.object(pdf2md, "pdf_text_and_pages", return_value=(None, None)):
+            self.assertEqual(pdf2md.cmd_recheck(args, {}), 0)
+        self.assertEqual(pdf2md.index_path(self.output).read_bytes(), before)
+        self.assertEqual(len(list(skipped.glob("*.pdf"))), 4)
 
 
 if __name__ == "__main__":

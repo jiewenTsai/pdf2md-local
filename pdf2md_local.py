@@ -41,7 +41,7 @@ import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
-__version__ = "1.1.2"
+__version__ = "1.2.0"
 APP = "pdf2md-local"
 
 IS_WINDOWS = os.name == "nt"
@@ -441,7 +441,13 @@ def index_path(output_root):
     return Path(output_root) / INDEX_NAME
 
 
+_INDEX_OVERRIDE = {}  # output folder -> index to use instead of the file (recheck's what-if questions)
+
+
 def load_index(output_root):
+    override = _INDEX_OVERRIDE.get(str(Path(output_root)))
+    if override is not None:
+        return override
     try:
         data = json.loads(index_path(output_root).read_text(encoding="utf-8"))
         if isinstance(data.get("entries"), list):
@@ -2468,6 +2474,136 @@ def front_matter_value(md_text, key):
     return value
 
 
+SOURCE_SHA_LINE = re.compile(r'^source_sha256:\s*"?([0-9a-f]{64})"?\s*$', re.M)
+
+
+def md_source_sha(md_file):
+    """The source_sha256 in an md's front matter, or None."""
+    try:
+        head = Path(md_file).read_text(encoding="utf-8")[:4000]
+    except (OSError, TypeError):
+        return None
+    match = SOURCE_SHA_LINE.search(head)
+    return match.group(1) if match else None
+
+
+def pdf_text_and_pages(pdf_path, pages=2):
+    """(text of the first pages, page count) when pypdfium2 is there (it comes with MinerU), else (None, None)."""
+    try:
+        import pypdfium2
+        document = pypdfium2.PdfDocument(str(pdf_path))
+        try:
+            text = " ".join(document[i].get_textpage().get_text_range() for i in range(min(pages, len(document))))
+            return text, len(document)
+        finally:
+            document.close()
+    except Exception:
+        return None, None
+
+
+def title_in_text(title, text):
+    """Do the first six words of this title appear, in order, in the text?"""
+    words = normalize_title(title or "").split()[:6]
+    return len(words) >= 3 and " ".join(words) in normalize_title(text or "")
+
+
+# A PDF this many pages long next to an md under this many characters per page: the folder may hold a shorter
+# document (slides, a summary) under the paper's name
+CHARS_PER_PAGE = 1500
+
+
+def recheck_skipped(inbox, output):
+    """Decide again, with today's rules, why each PDF in skipped/ was skipped.
+
+    Returns (pdf, verdict, folder, entries, note) for each PDF:
+    - "same file": the very PDF an md was made from;
+    - "copy": still recognised as a copy (today's rules, or the folder's title on the PDF's first page);
+    - "check": a copy by title, but the PDF is much longer than the md: the folder may hold a shorter document;
+    - "wrong": only an index entry written by older rules ties it to that folder (entries: those to remove)."""
+    index = load_index(output)
+    results = []
+    for pdf in sorted((Path(inbox) / "skipped").glob("*.pdf")):
+        sha = file_sha256(pdf)
+        mine = [e for e in index["entries"] if e.get("sha256") == sha and e.get("folder")]
+        original = next((e for e in mine
+                         if md_source_sha(existing_folder_md(output, e["folder"])) == sha), None)
+        if original:
+            results.append((pdf, "same file", original["folder"], [], ""))
+            continue
+        _INDEX_OVERRIDE[str(Path(output))] = {**index, "entries": [e for e in index["entries"] if e not in mine]}
+        try:
+            found = find_md(pdf, output, sha) or find_existing_by_doi(output, pdf)
+        finally:
+            _INDEX_OVERRIDE.pop(str(Path(output)), None)
+        md = found or (existing_folder_md(output, mine[0]["folder"]) if mine else None)
+        if md is None:
+            results.append((pdf, "wrong", mine[0]["folder"] if mine else None, mine, "no md matches it today"))
+            continue
+        text, pages = pdf_text_and_pages(pdf)
+        evidence = text if text else pdf.stem
+        start = " ".join((text or "").split())[:80]
+        if supplement_kind(start) or supplement_kind(pdf.stem.split(" - ")[-1]):
+            results.append((pdf, "wrong", md.parent.name, mine, "an appendix or supplement, not the paper"))
+            continue
+        if found is None and not title_in_text(existing_md_title(md), evidence):
+            results.append((pdf, "wrong", md.parent.name, mine, "the folder's title is not on its first page"))
+            continue
+        length = md_body_length(md)
+        if pages and length and pages * CHARS_PER_PAGE > LENGTH_RATIO * length:
+            results.append((pdf, "check", md.parent.name, [],
+                            f"{pages} pages against an md of {length} characters: is that folder a shorter document?"))
+            continue
+        results.append((pdf, "copy", md.parent.name, [], ""))
+    return results
+
+
+def cmd_recheck(args, config):
+    """List PDFs in skipped/ that older rules skipped by mistake; with --apply, send them back to be converted."""
+    inbox, output = resolve_folders(args, config)
+    if not (inbox / "skipped").is_dir():
+        print(f"Nothing to recheck: no skipped/ folder in {inbox}")
+        return 0
+    results = recheck_skipped(inbox, output)
+    labels = {"same file": "same file", "copy": "copy     ", "check": "CHECK    ", "wrong": "MISTAKE  "}
+    for pdf, verdict, folder, _, note in results:
+        target = f"(was -> {folder})" if verdict == "wrong" and folder else (f"-> {folder}" if folder else "")
+        print(f"{labels[verdict]}  {pdf.name}  {target}".rstrip() + (f"\n             {note}" if note else ""))
+    wrong = [(pdf, entries) for pdf, verdict, _, entries, _ in results if verdict == "wrong"]
+    checks = sum(1 for result in results if result[1] == "check")
+    print(f"\n{len(results)} PDF(s) in skipped/: {len(wrong)} skipped by mistake, {checks} to check by hand.")
+    if checks:
+        print("CHECK: open that folder's md. If it is not the paper, rename the folder (and its md), then move the "
+              "PDF back to the input folder.")
+    if not wrong:
+        return 0
+    if not args.apply:
+        print(f"Run `{APP} recheck --apply` to remove their index entries (after a backup) and move them back to "
+              f"the input folder, where they are converted again.")
+        return 0
+    log_file = inbox / LOG_NAME
+    holder = acquire_lock(inbox, "recheck", log_file)
+    if holder is not None:
+        raise UserError("A conversion is running right now; run recheck --apply again when it has finished.")
+    try:
+        backup = inbox / f"{INDEX_NAME}.backup-{datetime.datetime.now():%Y%m%d-%H%M%S}"
+        if index_path(output).is_file():
+            shutil.copy2(index_path(output), backup)
+        index = load_index(output)
+        drop = [entry for _, entries in wrong for entry in entries]
+        index["entries"] = [e for e in index["entries"] if e not in drop]
+        save_index(output, index)
+        for pdf, entries in wrong:
+            moved = move_without_overwrite(pdf, inbox)
+            log(log_file, f"Recheck: {pdf.name} was skipped by mistake"
+                          + (f" (as {entries[0]['folder']})" if entries else "") + "; sent back to be converted")
+            print(f"sent back: {moved.name}")
+        print(f"Index backup: {backup.name}. The watcher converts them within a few minutes "
+              f"(`{APP} status` shows progress).")
+    finally:
+        release_lock(inbox)
+    return 0
+
+
 def cmd_index(args, config):
     """rebuild: record every existing output folder in the index (mds are only read, never changed)."""
     inbox, output = resolve_folders(args, config)
@@ -2554,6 +2690,12 @@ def build_parser():
 
     p = sub.add_parser("doctor", help="check config, folders, MinerU, GPU and the watcher")
     p.set_defaults(func=cmd_doctor)
+
+    p = sub.add_parser("recheck", help="find PDFs in skipped/ that older versions skipped by mistake")
+    p.add_argument("--apply", action="store_true",
+                   help="remove their index entries (after a backup) and send them back to be converted")
+    folder_flags(p)
+    p.set_defaults(func=cmd_recheck)
 
     p = sub.add_parser("index", help=f"rebuild: record existing output folders in {INDEX_NAME}")
     p.add_argument("action", choices=["rebuild"])
