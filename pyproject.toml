@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdf2md-local"
-version = "1.1.1"
+version = "1.1.2"
 description = "Drop PDFs into input_pdf; a local watcher converts them to Markdown in output_md with MinerU on your GPU."
 readme = "README.md"
 license = { text = "MIT" }

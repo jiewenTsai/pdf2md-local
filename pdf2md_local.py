@@ -41,7 +41,7 @@ import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
-__version__ = "1.1.1"
+__version__ = "1.1.2"
 APP = "pdf2md-local"
 
 IS_WINDOWS = os.name == "nt"
@@ -550,6 +550,8 @@ def pdf_linked_dois(pdf_path):
 def find_existing_by_doi(output_root, pdf_path):
     """Before conversion: each metadata DOI, checked against the title of the same metadata block when it has
     one; then DOIs from links, accepted only when one of the PDF's titles matches the indexed title."""
+    if any(supplement_kind(title) for title in pdf_embedded_titles(pdf_path)[:1]):
+        return None
     for doi, title in pdf_metadata_records(pdf_path):
         existing = find_md_by_doi(output_root, [doi], title)
         if existing is not None:
@@ -1710,6 +1712,19 @@ def remember_alias(output_root, pdf_path, sha, existing_md):
                                   "sha256": sha, "added": datetime.date.today().isoformat()})
 
 
+# An appendix, supplement or erratum shares its paper's title and DOI but is a document of its own. Its
+# folder gets the paper's name plus this suffix, and its index entry has no DOI, so DOI lookups find the paper.
+SUPPLEMENT_TITLE = re.compile(
+    r"^\W*(?:(?:online|web)\s+)?(?:(?P<appendix>appendix|appendices)|(?P<supplement>supplement(?:ary|al)?|supporting"
+    r"\s+information)|(?P<erratum>erratum|corrigendum|correction\s+to))\b", re.I)
+
+
+def supplement_kind(title):
+    """"appendix", "supplement" or "erratum" for such a title, else None."""
+    match = SUPPLEMENT_TITLE.match(title or "")
+    return next((kind for kind, text in match.groupdict().items() if text), None) if match else None
+
+
 # Same DOI or title but one md this many times longer than the other: not the same document (a 3-page
 # summary or review of a paper, a supplement, an erratum), so both are kept
 LENGTH_RATIO = 3.0
@@ -1767,14 +1782,24 @@ def process_one(config, pdf_path, tool, version, output_root, done_dir, log_file
         work_dir = Path(temp_text)
         md_path = convert_with_mineru(config, pdf_path, work_dir)
         name, meta, how = choose_name(pdf_path, md_path.read_text(encoding="utf-8"), config)
-        length = len(md_body(md_path.read_text(encoding="utf-8")))
-        duplicate = find_md_by_doi(output_root, [meta.get("doi")], meta.get("title"))
+        md_text = md_path.read_text(encoding="utf-8")
+        length = len(md_body(md_text))
+        own_title = md_title(md_head(md_text))
+        kind = supplement_kind(own_title)
+        if kind:
+            # Never a duplicate of its paper: kept as "<paper name>_<kind>", without the paper's DOI in the index
+            log(log_file, f"{kind.capitalize()} of {meta.get('title') or 'a paper'}: kept as a document of its own")
+            name, _ = free_folder_name(output_root, f"{name}_{kind}", None)
+            meta = {**meta, "title": " ".join(own_title.split()), "doi": None}
+            duplicate = None
+        else:
+            duplicate = find_md_by_doi(output_root, [meta.get("doi")], meta.get("title"))
         if duplicate is not None and lengths_differ(length, md_body_length(duplicate)):
             log(log_file, f"Kept separately: {pdf_path.name} has the DOI of {duplicate.parent.name}, but its md is "
                           f"{length} characters against {md_body_length(duplicate)} (a summary, supplement or "
                           f"the full paper?); check which is which")
             duplicate = None
-        if duplicate is None:
+        if duplicate is None and not kind:
             name, duplicate = free_folder_name(output_root, name, meta.get("title"), length)
         if duplicate is not None:
             remember_alias(output_root, pdf_path, sha, duplicate)

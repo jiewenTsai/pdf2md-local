@@ -229,7 +229,9 @@ Zotero 格式的檔名（`作者 - 2021 - 標題.pdf`）直接沿用。
 - 同一個檔案（SHA-256 相同），就算換了檔名也算；
 - PDF 本身 metadata 裡的 DOI，除非同一處記錄的標題是另一篇論文；
 - 只出現在連結裡的 DOI（例如參考文獻），必須 PDF 的標題也對得上才算，所以引用了某篇論文的 PDF 不會被誤認成那一篇；
-- 轉檔後 DOI 或標題相同，但其中一份 md 的長度超過另一份的 3 倍時不算重複。這時論文的摘要、補充資料或勘誤會另外存在加上 `_2` 的資料夾，log 會寫「Kept separately」。
+- 轉檔後 DOI 或標題相同，但其中一份 md 的長度超過另一份的 3 倍時不算重複。這時論文的摘要會另外存在加上 `_2` 的資料夾，log 會寫「Kept separately」。
+
+md 自己的標題以「Appendix」「Supplementary」「Supporting information」「Erratum」「Corrigendum」或「Correction to」開頭時，一律不算重複：它會存到 `<論文名稱>_appendix`（或 `_supplement`、`_erratum`），用 DOI 查詢時仍然找到論文本身。
 
 每份 md 的最前面有 YAML front matter：
 - `source_pdf`、`tool`、`tool_version`、`converted`；

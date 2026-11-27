@@ -298,5 +298,52 @@ class LengthRuleTest(unittest.TestCase):
         self.assertFalse(pdf2md.lengths_differ(None, 50000))
 
 
+
+class SupplementTest(unittest.TestCase):
+    """An appendix, supplement or erratum is a document of its own, not a duplicate of its paper."""
+
+    setUp, tearDown, convert = IndexTest.setUp, IndexTest.tearDown, IndexTest.convert
+    TITLE = "Fast approximate inference for rating scale models with many dimensions"
+    DOI = "10.5555/example.2026.290"
+    NAME = "okafor_2026_fast-approximate-inference-rating"
+
+    def convert_with_meta(self, pdf, md_text):
+        meta = {"title": self.TITLE, "doi": self.DOI, "surname": "Okafor", "year": "2026"}
+        with mock.patch.object(pdf2md, "choose_name", return_value=(self.NAME, meta, "crossref-title")):
+            return self.convert(pdf, md_text)
+
+    def test_appendix_gets_its_own_folder_and_doi_still_finds_the_paper(self):
+        paper = self.inbox / "paper.pdf"
+        paper.write_bytes(b"%PDF paper")
+        self.assertEqual(self.convert_with_meta(paper, f"# {self.TITLE}\n\n" + "y" * 40000), "done")
+        appendix = self.inbox / "appendix.pdf"
+        appendix.write_bytes(b"%PDF appendix")
+        # Long enough that the length rule alone would call it the same paper
+        md = f"# Appendix to “{self.TITLE}”\n\n" + "z" * 30000
+        self.assertEqual(self.convert_with_meta(appendix, md), "done")
+        folder = self.output / f"{self.NAME}_appendix"
+        self.assertTrue((folder / f"{folder.name}.md").exists())
+        self.assertEqual(pdf2md.find_md_by_doi(self.output, [self.DOI], self.TITLE).parent.name, self.NAME)
+        entry = next(e for e in pdf2md.load_index(self.output)["entries"] if e["folder"] == folder.name)
+        self.assertIsNone(entry.get("doi"))
+        self.assertTrue(entry["title"].startswith("Appendix to"))
+
+    def test_appendix_converted_before_its_paper_leaves_the_name_to_the_paper(self):
+        appendix = self.inbox / "appendix.pdf"
+        appendix.write_bytes(b"%PDF appendix")
+        self.assertEqual(self.convert_with_meta(appendix, f"# Supplementary material for {self.TITLE}\n\n" + "z" * 9000), "done")
+        paper = self.inbox / "paper.pdf"
+        paper.write_bytes(b"%PDF paper")
+        self.assertEqual(self.convert_with_meta(paper, f"# {self.TITLE}\n\n" + "y" * 40000), "done")
+        self.assertTrue((self.output / f"{self.NAME}_supplement").is_dir())
+        self.assertTrue((self.output / self.NAME / f"{self.NAME}.md").exists())
+
+    def test_kinds(self):
+        self.assertEqual(pdf2md.supplement_kind("Online Appendix"), "appendix")
+        self.assertEqual(pdf2md.supplement_kind("Supporting Information"), "supplement")
+        self.assertEqual(pdf2md.supplement_kind("Erratum to: A paper"), "erratum")
+        self.assertIsNone(pdf2md.supplement_kind("A supplement-free paper on rating scales"))
+
+
 if __name__ == "__main__":
     unittest.main()

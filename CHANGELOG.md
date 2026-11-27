@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.2 (2026-11-27)
+
+- Appendices, supplements and errata are documents of their own. An md whose own title starts with "Appendix", "Supplementary", "Supporting information", "Erratum", "Corrigendum" or "Correction to" is saved as `<paper name>_appendix` (or `_supplement`, `_erratum`), never skipped as its paper. Its index entry has no DOI, so a DOI lookup still finds the paper. Before, Crossref gave an appendix its paper's DOI, and the appendix was skipped as the paper.
+
 ## 1.1.1 (2026-11-27)
 
 Fixes to how an already converted paper is recognised. They come from the same fixes in pdf2md, where a real collection of 106 papers showed them.

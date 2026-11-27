@@ -219,7 +219,9 @@ How a PDF is recognised as a paper that is already converted:
 - the same file (SHA-256), even under another name;
 - the DOI in the PDF's own metadata, unless the title stored next to it names another paper;
 - a DOI that only appears in a link (for example in the reference list) counts only when the PDF's title matches too, so a paper that cites a converted paper is not mistaken for it;
-- after conversion, the same DOI or title, unless one md is more than 3 times as long as the other. A short summary, supplement or erratum of a paper is then kept in its own folder (with `_2`), and the log says "Kept separately".
+- after conversion, the same DOI or title, unless one md is more than 3 times as long as the other. A short summary of a paper is then kept in its own folder (with `_2`), and the log says "Kept separately".
+
+An md whose own title starts with "Appendix", "Supplementary", "Supporting information", "Erratum", "Corrigendum" or "Correction to" is never a duplicate: it goes to `<paper name>_appendix` (or `_supplement`, `_erratum`), and a DOI lookup still finds the paper.
 
 Each md starts with YAML front matter:
 - `source_pdf`, `tool`, `tool_version` and `converted`;
