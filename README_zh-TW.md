@@ -299,7 +299,11 @@ md 自己的標題以「Appendix」「Supplementary」「Supporting information�
 
 ## 九、目前狀態
 
-已在 Windows 11（RTX 3060）上測試過。macOS 和 Linux 的程式都寫好了，單元測試也涵蓋了各平台的邏輯，但還沒有在這兩個系統上實際跑過。
+| 系統 | 實際跑過的部分 |
+|---|---|
+| macOS 26，Apple M4（Mac mini，16 GB） | 完整的一行安裝，包括 MinerU 和背景監看程式（launchd）。實際用 GPU 轉檔，每篇約 15–70 秒。在真實的 `skipped/` 資料夾上執行 `recheck --apply`：被誤略過的 8 份 PDF 都送回並轉好了。 |
+| Windows 11，RTX 3060 | 用監看程式實際轉檔；一行安裝跑到硬體檢查為止。還沒有用安裝程式完整裝過一次。 |
+| Linux（Ubuntu） | 還沒實際跑過。程式都寫好了，單元測試也涵蓋了各平台的邏輯。 |
 
 ## 開發
 

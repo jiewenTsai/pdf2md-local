@@ -291,7 +291,11 @@ Overrides, in order of precedence:
 
 ## Status
 
-Tested on Windows 11 (RTX 3060). The macOS and Linux code paths are there, and unit tests cover the platform logic, but they have not been run on those systems yet.
+| System | What has been run |
+|---|---|
+| macOS 26, Apple M4 (Mac mini, 16 GB) | The full one-line install, including MinerU and the background watcher (launchd). Real conversions on the GPU, about 15 to 70 s per paper. `recheck --apply` on a real `skipped/` folder: 8 PDFs that were skipped by mistake were sent back and converted. |
+| Windows 11, RTX 3060 | Real conversions with the watcher, and the one-line installer up to its hardware check. A full install with the installer has not been run yet. |
+| Linux (Ubuntu) | Not run yet. The code paths are there and unit tests cover the platform logic. |
 
 ## Development
 
